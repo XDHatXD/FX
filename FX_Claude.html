@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USD Exchange Rates</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --muted: #6b6b85;
+    --accent: #f0c040;
+    --c-eur: #4fc3f7;
+    --c-chf: #81c784;
+    --c-sgd: #ff8a65;
+    --c-cny: #f06292;
+    --c-jpy: #ba68c8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; overflow-x: hidden; }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 40px 24px 60px; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 40px; flex-wrap: wrap; gap: 16px; }
+  .header-left h1 { font-size: 2.5rem; font-weight: 800; }
+  .header-left h1 span { color: var(--accent); }
+  .header-left p { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+  .range-bar { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  .range-btn { background: none; border: none; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; padding: 6px 14px; cursor: pointer; border-radius: 5px; }
+  .range-btn.active { background: var(--accent); color: #000; }
+  .currency-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .toggle-btn { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+  .toggle-btn.active { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .toggle-btn .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; position: relative; }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 6px; }
+  .stat-value { font-size: 1.5rem; font-weight: 700; }
+  .stat-change { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; margin-top: 4px; }
+  .stat-change.up { color: #81c784; }
+  .stat-change.down { color: #e57373; }
+  .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; position: relative; height: 440px; }
+  .loader { position: absolute; inset: 0; background: var(--surface); display: flex; align-items: center; justify-content: center; z-index: 10; font-family: 'JetBrains Mono'; color: var(--muted); }
+  #fxChart { width: 100% !important; height: 100% !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-left">
+      <h1>USD <span>/</span> FX</h1>
+      <p>HISTORICAL EXCHANGE RATES · FRANKFURTER API</p>
+    </div>
+    <div class="range-bar" id="rangeBar">
+      <button class="range-btn" data-days="30">1M</button>
+      <button class="range-btn" data-days="90">3M</button>
+      <button class="range-btn active" data-days="365">1Y</button>
+      <button class="range-btn" data-days="1825">5Y</button>
+    </div>
+  </header>
+
+  <div class="currency-toggles" id="toggles">
+    <button class="toggle-btn active" data-currency="EUR"><span class="dot" style="background:var(--c-eur)"></span> EUR</button>
+    <button class="toggle-btn active" data-currency="CHF"><span class="dot" style="background:var(--c-chf)"></span> CHF</button>
+    <button class="toggle-btn active" data-currency="SGD"><span class="dot" style="background:var(--c-sgd)"></span> SGD</button>
+    <button class="toggle-btn active" data-currency="CNY"><span class="dot" style="background:var(--c-cny)"></span> CNY</button>
+    <button class="toggle-btn active" data-currency="JPY"><span class="dot" style="background:var(--c-jpy)"></span> JPY</button>
+  </div>
+
+  <div class="stats-row" id="statsRow">
+    </div>
+
+  <div class="chart-wrap">
+    <div class="loader" id="loader">FETCHING RATES...</div>
+    <canvas id="fxChart"></canvas>
+  </div>
+</div>
+
+<script>
+const CURRENCIES = ['EUR', 'CHF', 'SGD', 'CNY', 'JPY'];
+const COLORS = { EUR: '#4fc3f7', CHF: '#81c784', SGD: '#ff8a65', CNY: '#f06292', JPY: '#ba68c8' };
+let chart = null;
+let activeCurrencies = new Set(CURRENCIES);
+let currentDays = 365;
+let allData = {};
+
+// Initialize Stat Cards HTML
+document.getElementById('statsRow').innerHTML = CURRENCIES.map(c => `
+  <div class="stat-card">
+    <div class="stat-label">USD → ${c}</div>
+    <div class="stat-value" id="val-${c}">—</div>
+    <div class="stat-change" id="chg-${c}">—</div>
+  </div>
+`).join('');
+
+async function fetchRates(days) {
+  const to = new Date().toISOString().split('T')[0];
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - days);
+  const from = fromDate.toISOString().split('T')[0];
+  
+  const url = `https://api.frankfurter.dev/v1/${from}..${to}?base=USD&symbols=${CURRENCIES.join(',')}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  
+  const result = {};
+  CURRENCIES.forEach(c => result[c] = []);
+  Object.keys(json.rates).sort().forEach(date => {
+    CURRENCIES.forEach(c => {
+      if(json.rates[date][c]) result[c].push({ x: date, y: json.rates[date][c] });
+    });
+  });
+  return result;
+}
+
+function updateStats(data) {
+  CURRENCIES.forEach(c => {
+    const arr = data[c];
+    if (!arr || arr.length < 2) return;
+    const latest = arr[arr.length - 1].y;
+    const first = arr[0].y;
+    const pct = ((latest - first) / first) * 100;
+    document.getElementById(`val-${c}`).textContent = latest.toFixed(c === 'JPY' ? 2 : 4);
+    const el = document.getElementById(`chg-${c}`);
+    el.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+    el.className = 'stat-change ' + (pct > 0 ? 'up' : 'down');
+  });
+}
+
+function renderChart(data) {
+  const canvas = document.getElementById('fxChart');
+  if (chart) { chart.destroy(); chart = null; }
+
+  const firstC = CURRENCIES.find(c => data[c].length > 0);
+  const labels = data[firstC].map(p => p.x);
+
+  chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: CURRENCIES.filter(c => activeCurrencies.has(c)).map(c => ({
+        label: `USD/${c}`,
+        data: data[c].map(p => p.y),
+        borderColor: COLORS[c],
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.1
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#6b6b85' } },
+        y: { grid: { color: '#1a1a28' }, ticks: { color: '#6b6b85' } }
+      }
+    }
+  });
+}
+
+async function load(days) {
+  document.getElementById('loader').style.display = 'flex';
+  try {
+    allData = await fetchRates(days);
+    updateStats(allData);
+    renderChart(allData);
+    document.getElementById('loader').style.display = 'none';
+  } catch (e) {
+    document.getElementById('loader').textContent = "Error loading data.";
+  }
+}
+
+document.getElementById('rangeBar').addEventListener('click', e => {
+  const btn = e.target.closest('.range-btn');
+  if (!btn) return;
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDays = parseInt(btn.dataset.days);
+  load(currentDays);
+});
+
+document.getElementById('toggles').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-btn');
+  if (!btn) return;
+  const c = btn.dataset.currency;
+  activeCurrencies.has(c) ? activeCurrencies.delete(c) : activeCurrencies.add(c);
+  btn.classList.toggle('active');
+  renderChart(allData);
+});
+
+load(currentDays);
+</script>
+</body>
+</html>
