@@ -54,21 +54,21 @@
       <p>HISTORICAL EXCHANGE RATES · FRANKFURTER API</p>
     </div>
     <div class="range-bar" id="rangeBar">
+      <button class="range-btn active" data-days="7">1W</button>
       <button class="range-btn" data-days="30">1M</button>
       <button class="range-btn" data-days="90">3M</button>
-      <button class="range-btn active" data-days="365">1Y</button>
+      <button class="range-btn" data-days="365">1Y</button>
       <button class="range-btn" data-days="1825">5Y</button>
     </div>
   </header>
 
-  <div class="currency-toggles" id="toggles">
+ <div class="currency-toggles" id="toggles">
     <button class="toggle-btn active" data-currency="EUR"><span class="dot" style="background:var(--c-eur)"></span> EUR</button>
     <button class="toggle-btn active" data-currency="CHF"><span class="dot" style="background:var(--c-chf)"></span> CHF</button>
     <button class="toggle-btn active" data-currency="SGD"><span class="dot" style="background:var(--c-sgd)"></span> SGD</button>
     <button class="toggle-btn active" data-currency="CNY"><span class="dot" style="background:var(--c-cny)"></span> CNY</button>
     <button class="toggle-btn active" data-currency="JPY"><span class="dot" style="background:var(--c-jpy)"></span> JPY</button>
   </div>
-
   <div class="stats-row" id="statsRow">
     </div>
 
@@ -82,8 +82,8 @@
 const CURRENCIES = ['EUR', 'CHF', 'SGD', 'CNY', 'JPY'];
 const COLORS = { EUR: '#4fc3f7', CHF: '#81c784', SGD: '#ff8a65', CNY: '#f06292', JPY: '#ba68c8' };
 let chart = null;
-let activeCurrencies = new Set(CURRENCIES);
-let currentDays = 365;
+let activeCurrencies = new Set(CURRENCIES); // Start with all active
+let currentDays = 7; 
 let allData = {};
 
 // Initialize Stat Cards HTML
