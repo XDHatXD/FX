@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>XDH Strategy vs SPY Benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #0a0f1a; color: white; padding: 20px; }
+        .container { max-width: 1150px; margin: auto; background: #111827; padding: 25px; border-radius: 12px; border: 1px solid #1e293b; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        button { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button.active { background: #3b82f6; color: white; border-color: #60a5fa; }
+        .chart-wrapper { height: 550px; background: #1e293b; padding: 15px; border-radius: 8px; }
+        .legend-info { display: flex; gap: 20px; margin-top: 15px; font-size: 12px; }
+        .tag { padding: 4px 8px; border-radius: 4px; background: #0f172a; border-left: 3px solid #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="margin:0 0 20px 0; color: #f8fafc;">Strategy Performance vs. SPY Benchmark</h2>
+
+    <div class="controls" id="yearToggles"></div>
+
+    <div class="chart-wrapper">
+        <canvas id="mainChart"></canvas>
+    </div>
+
+    <div class="legend-info">
+        <div class="tag" style="border-color: #ffffff;"><strong>Portfolio:</strong> 20% CHF | 20% TSLA, IAU, CVX, GD</div>
+        <div class="tag" style="border-color: #a855f7;"><strong>Benchmark:</strong> SPY (S&P 500)</div>
+    </div>
+</div>
+
+<script>
+const API_KEY = "d6qqkmpr01qgdhqc0ol0d6qqkmpr01qgdhqc0olg";
+// Tickers to visualize
+const tickers = ["SPY", "IAU", "TSLA", "CVX", "GD", "CHF/USD"];
+const colors = { 
+    "SPY": "#a855f7", 
+    "IAU": "#fbbf24", 
+    "TSLA": "#ef4444", 
+    "CVX": "#3b82f6", 
+    "GD": "#94a3b8", 
+    "CHF/USD": "#10b981", 
+    "Portfolio": "#ffffff" 
+};
+
+const masterDb = {
+    2020: { 
+        SPY:[320,295,258,291,304,310,327,350,336,327,362,373], 
+        IAU:[48,50,54,54,56,62,63,60,59,56,59,58], 
+        TSLA:[43,35,52,55,72,95,166,143,129,189,235,235], 
+        CVX:[81,55,70,71,69,65,66,56,54,69,67,68], 
+        GD:[166,126,136,135,136,136,135,126,135,136,145,148], 
+        "CHF/USD":[1.03,1.04,1.02,1.03,1.04,1.06,1.07,1.10,1.12,1.10,1.13,1.12] 
+    },
+    2021: { 
+        SPY:[370,380,396,417,420,428,438,451,430,459,456,475], 
+        IAU:[57,54,52,54,57,53,55,54,53,54,57,56], 
+        TSLA:[264,222,236,208,226,229,245,258,371,381,352,352], 
+        CVX:[68,85,83,85,86,83,80,84,95,95,98,117], 
+        GD:[145,174,184,179,188,193,204,201,211,201,208,208], 
+        "CHF/USD":[1.12,1.11,1.08,1.09,1.11,1.10,1.09,1.08,1.09,1.10,1.08,1.09] 
+    },
+    2022: { 
+        SPY:[449,437,452,412,413,377,412,395,357,386,407,382], 
+        IAU:[54,58,56,54,52,50,49,47,46,49,51,51], 
+        TSLA:[312,359,290,252,224,297,275,265,227,194,123,123], 
+        CVX:[110,138,133,149,124,140,136,124,156,160,156,179], 
+        GD:[204,236,221,219,228,227,214,223,228,231,248,248], 
+        "CHF/USD":[1.09,1.10,1.08,1.05,1.03,1.04,1.02,1.01,1.00,1.04,1.08,1.08] 
+    },
+    2023: { 
+        SPY:[406,396,410,416,417,443,457,450,427,418,456,475], 
+        IAU:[56,56,57,56,54,56,55,53,56,57,59,58], 
+        TSLA:[173,207,164,203,261,267,258,250,200,240,248,248], 
+        CVX:[151,143,148,133,139,145,144,151,130,130,135,149], 
+        GD:[228,223,228,214,223,250,258,250,200,240,259,259], 
+        "CHF/USD":[1.08,1.10,1.12,1.11,1.12,1.15,1.14,1.12,1.13,1.16,1.18,1.18] 
+    },
+    2024: { 
+        SPY:[484,508,523,501,527,544,550,563,575,573,603,610], 
+        IAU:[58,64,68,69,67,73,77,83,84,85,85,86], 
+        TSLA:[187,175,183,178,197,232,214,261,249,345,403,403], 
+        CVX:[133,144,147,150,144,148,138,137,139,153,137,141], 
+        GD:[254,299,304,265,264,276,321,337,342,348,350,351], 
+        "CHF/USD":[1.17,1.14,1.11,1.10,1.11,1.12,1.14,1.17,1.18,1.16,1.14,1.13] 
+    },
+    2025: { 
+        SPY:[615,620,635,640,655,662,670,685,690,705,715,720], 
+        IAU:[86,92,94,95,96,96,98,102,104,98,96,96], 
+        TSLA:[404,259,282,346,317,308,333,444,456,430,449,449], 
+        CVX:[141,160,130,132,138,146,157,152,154,149,150,141], 
+        GD:[351,338,335,340,343,338,351,357,338,335,351,351], 
+        "CHF/USD":[1.13,1.12,1.14,1.15,1.16,1.17,1.16,1.15,1.16,1.18,1.19,1.18] 
+    },
+    2026: { 
+        SPY:[725,735,748], 
+        IAU:[101,98,104], 
+        TSLA:[430,402,364], 
+        CVX:[175,186,188], 
+        GD:[351,357,343], 
+        "CHF/USD":[1.18,1.19,1.21] 
+    }
+};
+
+let myChart = null;
+
+async function updateChart(year) {
+    const datasets = [];
+    const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let indexedResults = {};
+
+    
+        for (const key of tickers) {
+        let dataArray = [...masterDb[year][key]];
+
+        if (year === 2026 && key !== "CHF/USD") {
+            try {
+                const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${key}&token=${API_KEY}`);
+                const d = await r.json();
+                if (d.c) dataArray[dataArray.length - 1] = d.c;
+            } catch (e) {}
+        }
+
+        const base = dataArray[0];
+        const indexed = dataArray.map(v => (v / base) * 100);
+        indexedResults[key] = indexed;
+
+        // Custom styling for SPY
+        const isSPY = (key === "SPY");
+
+        datasets.push({
+            label: key,
+            data: indexed,
+            borderColor: colors[key],
+            // SPY is now significantly thicker
+            borderWidth: isSPY ? 5 : (key === "CHF/USD" ? 1.5 : 1), 
+            borderDash: key === "CHF/USD" ? [4, 4] : [],
+            // Add markers only to SPY (and keep them for Portfolio later)
+            pointRadius: isSPY ? 5 : 0, 
+            pointBackgroundColor: colors[key],
+            pointHoverRadius: 7,
+            tension: 0.3
+        });
+
+    }
+
+    // --- CALCULATE PORTFOLIO (Exclude SPY from weighting) ---
+    const portfolioData = indexedResults["IAU"].map((_, i) => {
+        return (
+            (indexedResults["CHF/USD"][i] * 0.20) + 
+            (indexedResults["TSLA"][i] * 0.20) + 
+            (indexedResults["IAU"][i] * 0.20) + 
+            (indexedResults["CVX"][i] * 0.20) + 
+            (indexedResults["GD"][i] * 0.20)
+        );
+    });
+
+    datasets.push({
+        label: "STRATEGY PORTFOLIO",
+        data: portfolioData,
+        borderColor: colors["Portfolio"],
+        borderWidth: 4,
+        pointRadius: 4,
+        tension: 0.3,
+        zIndex: 10
+    });
+
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    if (myChart) myChart.destroy();
+
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels.slice(0, datasets[0].data.length), datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: 'white', font: { weight: 'bold' } } }
+            },
+            scales: {
+                y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                x: { ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+
+    document.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.innerText == year));
+}
+
+const toggleDiv = document.getElementById('yearToggles');
+[2020, 2021, 2022, 2023, 2024, 2025, 2026].forEach(y => {
+    const b = document.createElement('button');
+    b.innerText = y;
+    b.onclick = () => updateChart(y);
+    toggleDiv.appendChild(b);
+});
+
+window.onload = () => updateChart(2026);
+</script>
+</body>
+</html>
